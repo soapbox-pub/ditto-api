@@ -1,12 +1,13 @@
 # Ditto API
 
-The API behind [api.ditto.pub](https://api.ditto.pub): link previews, favicons,
-and generated Open Graph images for [Ditto](https://ditto.pub).
+The API behind [api.ditto.pub](https://api.ditto.pub): link previews and
+favicons for [Ditto](https://ditto.pub).
 
 A Rust rewrite of the API half of
 [ditto-server](https://gitlab.com/soapbox-pub/ditto-server), and a drop-in
 replacement for it on an API-only host. It serves no frontend, does no crawler
-meta injection, and has no sitemap; those stay with whatever serves ditto.pub.
+meta injection, has no sitemap, and doesn't generate OG images
+(`/og-image/`, which nothing used).
 
 ## Usage
 
@@ -15,8 +16,7 @@ cp .env.example .env
 cargo run --release
 ```
 
-It ships as one binary, with the emoji font compiled in. The cache is a
-single SQLite file at `DB_PATH`.
+It ships as one binary. The cache is a single SQLite file at `DB_PATH`.
 
 ```sh
 # Drop a stored link preview so the next request refetches it. Accepts the
@@ -53,21 +53,11 @@ Reddit, show crawlers a different image than browsers. Non-images get a 415.
 The first `<link rel="…icon…">` on `https://{hostname}`, falling back to
 `/favicon.ico`.
 
-### `GET /og-image/{nip19}`
-
-A 1200×630 JPEG for a Nostr entity, cached for `OG_IMAGE_CACHE_TTL`:
-
-- `npub` / `nprofile`: the avatar on the profile's active theme (kind 16767),
-  masked to the profile's emoji `shape` if it has one
-- `naddr` / `nevent` / `note` for themes (kinds 16767, 36767): a theme mockup
-- the same for Color Moments (kind 3367): the palette, with its emoji
-
-Other kinds and unknown entities are a 404.
-
 ## Configuration
 
 See [`.env.example`](.env.example). It follows ditto-server's variables, minus
-the frontend-only ones. `DB_DIR` (LMDB) is replaced by `DB_PATH` (SQLite).
+the frontend-only ones and those for OG images, which ditto-api doesn't
+generate. `DB_DIR` (LMDB) is replaced by `DB_PATH` (SQLite).
 Existing ditto-server caches aren't migrated, so caches start cold.
 
 ## Deployment

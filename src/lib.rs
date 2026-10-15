@@ -1,4 +1,4 @@
-//! Ditto's API server: link previews, favicons, and generated OG images.
+//! Ditto's API server: link previews and favicons.
 
 pub mod config;
 pub mod db;
@@ -8,7 +8,6 @@ pub mod gate;
 pub mod js;
 pub mod link_preview;
 pub mod link_preview_image;
-pub mod og_image;
 
 use std::sync::Arc;
 
@@ -24,15 +23,12 @@ use config::Config;
 use db::Db;
 use fetch::text;
 use link_preview::cache::{self, LinkPreviewCache};
-use og_image::OgImages;
-use og_image::relay::Relays;
 
 /// Everything the handlers share.
 pub struct AppState {
     pub config: Config,
     pub client: reqwest::Client,
     pub link_previews: LinkPreviewCache,
-    pub og_images: Arc<OgImages>,
 }
 
 impl AppState {
@@ -58,7 +54,7 @@ impl AppState {
             })
         };
         let link_previews = LinkPreviewCache::new(
-            db.clone(),
+            db,
             cache::Options {
                 ttl: config.link_preview_cache_ttl,
                 error_ttl: config.link_preview_error_ttl,
@@ -69,20 +65,10 @@ impl AppState {
             fetch_fn,
         );
 
-        let og_images = OgImages::new(
-            db,
-            config.og_image_cache_ttl,
-            Relays::new(config.relay_urls.clone()),
-            client.clone(),
-            config.limits.clone(),
-            config.query_timeout,
-        );
-
         Arc::new(Self {
             config,
             client,
             link_previews,
-            og_images,
         })
     }
 }
@@ -105,17 +91,13 @@ pub fn app(state: Arc<AppState>) -> Router {
         ])
         .allow_headers(AllowHeaders::mirror_request());
 
-    let cross_origin = Router::new()
+    let routes = Router::new()
         .route("/favicon/{hostname}", get(favicon))
         .route("/link-preview/", get(link_preview))
         .route("/link-preview/{*url}", get(link_preview))
         .route("/link-preview-image/", get(link_preview_image))
         .route("/link-preview-image/{*url}", get(link_preview_image))
         .layer(cors);
-
-    let routes = Router::new()
-        .route("/og-image/{nip19}", get(og_image))
-        .merge(cross_origin);
 
     Router::new()
         .merge(routes.clone())
@@ -139,27 +121,6 @@ fn wrapped_url(uri: &Uri, route: &str) -> Option<String> {
         url.push_str(q);
     }
     Some(url)
-}
-
-async fn og_image(State(state): State<Arc<AppState>>, Path(nip19): Path<String>) -> Response {
-    match state.og_images.fetch(&nip19).await {
-        Ok(Some(jpeg)) => (
-            [
-                (
-                    header::CACHE_CONTROL,
-                    HeaderValue::from_static("public, max-age=3600"),
-                ),
-                (header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg")),
-            ],
-            jpeg,
-        )
-            .into_response(),
-        Ok(None) => text(StatusCode::NOT_FOUND, "Not Found"),
-        Err(e) => {
-            tracing::error!("[og-image] {nip19}: {e:#}");
-            text(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-        }
-    }
 }
 
 async fn favicon(State(state): State<Arc<AppState>>, Path(hostname): Path<String>) -> Response {

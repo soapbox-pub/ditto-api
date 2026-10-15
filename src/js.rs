@@ -38,86 +38,6 @@ pub fn parse_int(s: &str) -> Option<i64> {
     (n != 0).then_some(n)
 }
 
-/// Format a number the way JavaScript's `String(n)` does for the values that
-/// appear in generated SVG: integers without a fraction, and no negative zero.
-pub fn num(n: f64) -> String {
-    if n == 0.0 {
-        return "0".to_string();
-    }
-    if n.is_infinite() {
-        return if n > 0.0 { "Infinity" } else { "-Infinity" }.to_string();
-    }
-    format!("{n}")
-}
-
-/// `Math.round`, which rounds halves up rather than away from zero.
-pub fn round(n: f64) -> f64 {
-    (n + 0.5).floor()
-}
-
-/// `Math.min` of two numbers, which is NaN if either is (unlike `f64::min`).
-pub fn min(a: f64, b: f64) -> f64 {
-    if a.is_nan() || b.is_nan() {
-        f64::NAN
-    } else {
-        a.min(b)
-    }
-}
-
-/// `Math.max` of two numbers, which is NaN if either is (unlike `f64::max`).
-pub fn max(a: f64, b: f64) -> f64 {
-    if a.is_nan() || b.is_nan() {
-        f64::NAN
-    } else {
-        a.max(b)
-    }
-}
-
-/// `Number(s)` for strings: blank is zero, anything unparseable is NaN.
-pub fn to_number(s: &str) -> f64 {
-    let s = s.trim();
-    if s.is_empty() {
-        return 0.0;
-    }
-    match s.trim_start_matches(['+', '-']) {
-        "Infinity" => {
-            return if s.starts_with('-') {
-                f64::NEG_INFINITY
-            } else {
-                f64::INFINITY
-            };
-        }
-        t if t
-            .chars()
-            .any(|c| c.is_ascii_alphabetic() && c != 'e' && c != 'E') =>
-        {
-            return f64::NAN;
-        }
-        _ => {}
-    }
-    s.parse().unwrap_or(f64::NAN)
-}
-
-/// `Number.parseInt(s, 16)`: the longest hex prefix, NaN if there is none.
-pub fn parse_hex_int(s: &str) -> f64 {
-    let s = s.trim_start();
-    let (negative, s) = match s.as_bytes().first() {
-        Some(b'-') => (true, &s[1..]),
-        Some(b'+') => (false, &s[1..]),
-        _ => (false, s),
-    };
-    let s = s
-        .strip_prefix("0x")
-        .or_else(|| s.strip_prefix("0X"))
-        .unwrap_or(s);
-    let end = s.find(|c: char| !c.is_ascii_hexdigit()).unwrap_or(s.len());
-    match u64::from_str_radix(&s[..end], 16) {
-        Ok(n) if negative => -(n as f64),
-        Ok(n) => n as f64,
-        Err(_) => f64::NAN,
-    }
-}
-
 /// `escapeUTF8` from the `entities` package: escapes the five XML specials.
 pub fn escape_xml(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -166,46 +86,6 @@ mod tests {
         assert_eq!(parse_int("0"), None);
         assert_eq!(parse_int("abc"), None);
         assert_eq!(parse_int(""), None);
-    }
-
-    #[test]
-    fn formats_numbers_like_js() {
-        assert_eq!(num(540.0), "540");
-        assert_eq!(num(157.5), "157.5");
-        assert_eq!(num(-0.0), "0");
-        assert_eq!(num(630.0 / 7.0), "90");
-        assert_eq!(num(1200.0 / 7.0), "171.42857142857142");
-    }
-
-    #[test]
-    fn converts_strings_like_number() {
-        assert_eq!(to_number(""), 0.0);
-        assert_eq!(to_number(" 12.5 "), 12.5);
-        assert_eq!(to_number("1e2"), 100.0);
-        assert!(to_number("12px").is_nan());
-        assert!(to_number("inf").is_nan());
-        assert!(to_number("NaN").is_nan());
-    }
-
-    #[test]
-    fn parses_hex_like_parse_int() {
-        assert_eq!(parse_hex_int("ff"), 255.0);
-        assert_eq!(parse_hex_int("1z"), 1.0);
-        assert!(parse_hex_int("zz").is_nan());
-        assert!(parse_hex_int("").is_nan());
-    }
-
-    #[test]
-    fn min_and_max_propagate_nan() {
-        assert!(min(1.0, f64::NAN).is_nan());
-        assert!(max(f64::NAN, 1.0).is_nan());
-        assert_eq!(min(1.0, 2.0), 1.0);
-    }
-
-    #[test]
-    fn rounds_halves_up() {
-        assert_eq!(round(2.5), 3.0);
-        assert_eq!(round(-2.5), -2.0);
     }
 
     #[test]

@@ -18,14 +18,6 @@ pub struct LinkPreviewEntry {
     pub fetched_at: i64,
 }
 
-/// A cached OG image.
-#[derive(Debug, Clone)]
-pub struct OgImageEntry {
-    pub jpeg: Vec<u8>,
-    /// Unix time in milliseconds when it was rendered.
-    pub fetched_at: i64,
-}
-
 /// Handle to the cache database, cheap to clone.
 ///
 /// Every statement is a single-row lookup or write on a primary key, so a
@@ -58,11 +50,6 @@ impl Db {
                 key TEXT PRIMARY KEY,
                 json TEXT NOT NULL,
                 status INTEGER NOT NULL,
-                fetched_at INTEGER NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS og_image (
-                key TEXT PRIMARY KEY,
-                jpeg BLOB NOT NULL,
                 fetched_at INTEGER NOT NULL
             );",
         )?;
@@ -106,30 +93,6 @@ impl Db {
             .conn()
             .execute("DELETE FROM link_preview WHERE key = ?", [key])?
             > 0)
-    }
-
-    pub fn get_og_image(&self, key: &str) -> Result<Option<OgImageEntry>> {
-        Ok(self
-            .conn()
-            .query_row(
-                "SELECT jpeg, fetched_at FROM og_image WHERE key = ?",
-                [key],
-                |row| {
-                    Ok(OgImageEntry {
-                        jpeg: row.get(0)?,
-                        fetched_at: row.get(1)?,
-                    })
-                },
-            )
-            .optional()?)
-    }
-
-    pub fn put_og_image(&self, key: &str, entry: &OgImageEntry) -> Result<()> {
-        self.conn().execute(
-            "INSERT OR REPLACE INTO og_image (key, jpeg, fetched_at) VALUES (?, ?, ?)",
-            params![key, entry.jpeg, entry.fetched_at],
-        )?;
-        Ok(())
     }
 }
 

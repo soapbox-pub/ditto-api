@@ -29,10 +29,6 @@ pub struct Config {
     /// Every absolute API URL handed back to a client is built from it: the
     /// link preview image proxy URLs baked into link previews.
     pub api_url: String,
-    /// Nostr relays queried for OG image data.
-    pub relay_urls: Vec<String>,
-    /// Timeout for relay queries.
-    pub query_timeout: Duration,
     /// User-Agent sent when fetching link previews and their images.
     pub link_preview_user_agent: String,
     /// Limits for upstream HTTP fetches.
@@ -51,8 +47,6 @@ pub struct Config {
     pub link_preview_concurrency: usize,
     /// Maximum link preview fetches queued before requests are shed.
     pub link_preview_queue_limit: usize,
-    /// How long a rendered OG image stays fresh.
-    pub og_image_cache_ttl: Duration,
 }
 
 impl Config {
@@ -83,14 +77,6 @@ impl Config {
             None => format!("{}/api", public_url.trim_end_matches('/')),
         };
 
-        let relay_urls = get("RELAY_URLS")
-            .or_else(|| get("RELAY_URL"))
-            .unwrap_or_else(|| "wss://relay.ditto.pub".to_string())
-            .split(',')
-            .map(|url| url.trim().to_string())
-            .filter(|url| !url.is_empty())
-            .collect();
-
         let ms = |key: &str, default: u64| -> Result<Duration> {
             Ok(Duration::from_millis(non_neg_int(&get, key, default)?))
         };
@@ -99,8 +85,6 @@ impl Config {
             port,
             public_url,
             api_url,
-            relay_urls,
-            query_timeout: ms("QUERY_TIMEOUT", 5_000)?,
             link_preview_user_agent: get("LINK_PREVIEW_USER_AGENT")
                 .unwrap_or_else(|| "facebookexternalhit".to_string()),
             limits: FetchLimits {
@@ -114,7 +98,6 @@ impl Config {
             link_preview_error_ttl: ms("LINK_PREVIEW_ERROR_TTL", 600_000)?,
             link_preview_concurrency: pos_int(&get, "LINK_PREVIEW_CONCURRENCY", 8)? as usize,
             link_preview_queue_limit: non_neg_int(&get, "LINK_PREVIEW_QUEUE_LIMIT", 64)? as usize,
-            og_image_cache_ttl: ms("OG_IMAGE_CACHE_TTL", 3_600_000)?,
         })
     }
 
@@ -186,16 +169,6 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(c.api_url, "https://api.ditto.pub");
-    }
-
-    #[test]
-    fn splits_relay_urls() {
-        let c = config(&[
-            ("PUBLIC_URL", "https://ditto.pub"),
-            ("RELAY_URLS", "wss://a.example, ,wss://b.example"),
-        ])
-        .unwrap();
-        assert_eq!(c.relay_urls, ["wss://a.example", "wss://b.example"]);
     }
 
     #[test]

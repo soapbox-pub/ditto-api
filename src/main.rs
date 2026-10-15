@@ -16,7 +16,6 @@ async fn main() -> anyhow::Result<()> {
         // Under systemd stdout is the journal, which shows escapes literally.
         .with_ansi(std::io::stdout().is_terminal())
         .init();
-    let _ = rustls::crypto::ring::default_provider().install_default();
 
     let config = Config::from_env()?;
     let db = Db::open(&config.db_path)
