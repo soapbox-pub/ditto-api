@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use std::net::{Ipv4Addr, SocketAddr};
 
 use anyhow::Context;
@@ -12,6 +13,8 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        // Under systemd stdout is the journal, which shows escapes literally.
+        .with_ansi(std::io::stdout().is_terminal())
         .init();
     let _ = rustls::crypto::ring::default_provider().install_default();
 

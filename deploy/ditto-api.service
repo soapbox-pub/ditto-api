@@ -1,0 +1,23 @@
+[Unit]
+Description=Ditto API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ditto-api
+Group=ditto-api
+WorkingDirectory=/opt/ditto-api
+EnvironmentFile=/opt/ditto-api/.env
+ExecStart=/opt/ditto-api/bin/ditto-api
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/opt/ditto-api/data
+
+[Install]
+WantedBy=multi-user.target

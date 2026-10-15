@@ -70,6 +70,24 @@ See [`.env.example`](.env.example). It follows ditto-server's variables, minus
 the frontend-only ones. `DB_DIR` (LMDB) is replaced by `DB_PATH` (SQLite).
 Existing ditto-server caches aren't migrated, so caches start cold.
 
+## Deployment
+
+api.ditto.pub runs on CT 126 (`ditto-api.lan`, Ubuntu 26.04) on bacchus.
+Caddy on venus terminates TLS and proxies to it over WireGuard (`10.10.2.4`,
+peer of venus's `wg0`). The binary lives in `/opt/ditto-api/bin`, its config
+in `/opt/ditto-api/.env`, its cache in `/opt/ditto-api/data`, and it runs
+under [`deploy/ditto-api.service`](deploy/ditto-api.service).
+
+```sh
+cargo build --release
+scp target/release/{ditto-api,revoke-link-preview} root@ditto-api.lan:/opt/ditto-api/bin/
+ssh root@ditto-api.lan systemctl restart ditto-api
+```
+
+Ubuntu 26.04's AppArmor profile for `wg-quick` kills it inside an
+unprivileged container (it may not map its own interpreter), so it is
+disabled there: `ln -s /etc/apparmor.d/wg-quick /etc/apparmor.d/disable/`.
+
 ## Development
 
 ```sh
