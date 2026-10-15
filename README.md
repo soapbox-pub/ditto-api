@@ -80,8 +80,10 @@ under [`deploy/ditto-api.service`](deploy/ditto-api.service).
 
 ```sh
 cargo build --release
-scp target/release/{ditto-api,revoke-link-preview} root@ditto-api.lan:/opt/ditto-api/bin/
-ssh root@ditto-api.lan systemctl restart ditto-api
+scp target/release/{ditto-api,revoke-link-preview} root@ditto-api.lan:/tmp/
+# install replaces rather than overwrites, so the running binary isn't "busy".
+ssh root@ditto-api.lan 'install -m 755 /tmp/{ditto-api,revoke-link-preview} /opt/ditto-api/bin/ &&
+  systemctl restart ditto-api'
 ```
 
 Ubuntu 26.04's AppArmor profile for `wg-quick` kills it inside an
