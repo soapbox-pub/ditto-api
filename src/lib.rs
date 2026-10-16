@@ -18,6 +18,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use percent_encoding::percent_decode_str;
 use tower_http::cors::{AllowHeaders, Any, CorsLayer};
+use tower_http::set_header::SetResponseHeaderLayer;
 
 use config::Config;
 use db::Db;
@@ -75,8 +76,7 @@ impl AppState {
 
 /// The routes, served both bare and under `/api`.
 ///
-/// ditto-server's namespace was `/api/*`, and the proxy in front of
-/// api.ditto.pub still rewrites bare paths onto it, so both are served.
+/// ditto-server's namespace was `/api/*`, and clients still use both.
 pub fn app(state: Arc<AppState>) -> Router {
     // What Hono's `cors()` defaults to.
     let cors = CorsLayer::new()
@@ -103,6 +103,13 @@ pub fn app(state: Arc<AppState>) -> Router {
         .merge(routes.clone())
         .nest("/api", routes)
         .fallback(|| async { text(StatusCode::NOT_FOUND, "Not Found") })
+        // Nothing here is a page. The favicon and link-preview proxies return
+        // bytes fetched from arbitrary sites, and this keeps one of them from
+        // being sniffed as a document that runs script on this origin.
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static("default-src 'none'"),
+        ))
         .with_state(state)
 }
 
@@ -178,5 +185,32 @@ mod tests {
         );
         let uri: Uri = "/link-preview/".parse().unwrap();
         assert_eq!(wrapped_url(&uri, "link-preview").as_deref(), Some(""));
+    }
+
+    #[tokio::test]
+    async fn every_response_forbids_everything() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        let config =
+            Config::from_lookup(|key| (key == "PUBLIC_URL").then(|| "https://ditto.pub".into()))
+                .unwrap();
+        let app = app(AppState::new(config, Db::memory()));
+        let requests = [
+            Request::get("/nowhere").body(Body::empty()).unwrap(),
+            Request::options("/api/favicon/example.com")
+                .header(header::ORIGIN, "https://ditto.pub")
+                .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                .body(Body::empty())
+                .unwrap(),
+        ];
+        for request in requests {
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(
+                response.headers()[header::CONTENT_SECURITY_POLICY],
+                "default-src 'none'"
+            );
+        }
     }
 }

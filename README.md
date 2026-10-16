@@ -63,8 +63,11 @@ Existing ditto-server caches aren't migrated, so caches start cold.
 ## Deployment
 
 api.ditto.pub runs on CT 126 (`ditto-api.lan`, Ubuntu 26.04) on bacchus.
-Caddy on venus terminates TLS and proxies to it over WireGuard (`10.10.2.4`,
-peer of venus's `wg0`). The binary lives in `/opt/ditto-api/bin`, its config
+npanel on venus terminates TLS and passes requests to it through an
+[npanel tunnel](https://npanel.soapbox.pub/tunnels), whose agent runs in the
+container as `npanel-tunnel-ditto-api.service`. The tunnel adds no headers,
+so anything a response needs, like its Content-Security-Policy, ditto-api
+sets itself. The binary lives in `/opt/ditto-api/bin`, its config
 in `/opt/ditto-api/.env`, its cache in `/opt/ditto-api/data`, and it runs
 under [`deploy/ditto-api.service`](deploy/ditto-api.service).
 
@@ -76,9 +79,11 @@ ssh root@ditto-api.lan 'install -m 755 /tmp/{ditto-api,revoke-link-preview} /opt
   systemctl restart ditto-api'
 ```
 
-Ubuntu 26.04's AppArmor profile for `wg-quick` kills it inside an
-unprivileged container (it may not map its own interpreter), so it is
-disabled there: `ln -s /etc/apparmor.d/wg-quick /etc/apparmor.d/disable/`.
+The container also still has the WireGuard link to venus that carried
+traffic before the tunnel. Ubuntu 26.04's AppArmor profile for `wg-quick`
+kills it inside an unprivileged container (it may not map its own
+interpreter), so it is disabled there:
+`ln -s /etc/apparmor.d/wg-quick /etc/apparmor.d/disable/`.
 
 ## Development
 
